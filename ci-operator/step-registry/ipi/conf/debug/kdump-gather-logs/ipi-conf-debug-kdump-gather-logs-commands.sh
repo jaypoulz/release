@@ -13,7 +13,7 @@ function gather_kdump_logs_from_node {
   echo "Gathering kdump logs for ""$1"""
 
   # Start the debug pod and force it to stay up until removed
-  oc debug --to-namespace="default" node/"$1" -- /bin/bash -c 'sleep 300'  > /dev/null 2>&1 &
+  oc debug --to-namespace="default" node/"$1" -- /bin/bash -c 'sleep 300'  > /dev/null 2>&1 || true &
 
   # Check every few seconds to let the pod come up
   TIMEOUT=10
@@ -36,17 +36,17 @@ function gather_kdump_logs_from_node {
     echo "Pod name is: ${debug_pod}"
 
     # Wait for the debug pod to be ready
-    oc wait -n "default" --for=condition=Ready pod/"$debug_pod" --timeout=30s
+    oc wait -n "default" --for=condition=Ready pod/"$debug_pod" --timeout=60s || true
 
     # Copy kdump logs out of node and supress stdout
     echo "Copying kdump logs on node ""$1"""
-    oc cp --loglevel 1 -n "default" "${debug_pod}:/host${log_path}" "${output_path}/${1}_kdump_logs/"  > /dev/null 2>&1
+    oc cp --loglevel 1 -n "default" "${debug_pod}:/host${log_path}" "${output_path}/${1}_kdump_logs/" > /dev/null 2>&1 || true
 
     # Cleanup the debug pod
-    oc delete pod "$debug_pod" -n "default"
+    oc delete pod "$debug_pod" -n "default" || true
 
     # Remove directory if empty so we don't count it later
-    rmdir "${output_path}/${1}_kdump_logs" > /dev/null 2>&1
+    rmdir "${output_path}/${1}_kdump_logs" > /dev/null 2>&1 || true
   fi
 }
 
@@ -64,8 +64,9 @@ function package_kdump_logs {
   kdump_folders=""
 
   # Check if we got kdump output from any of the nodes
-  if find ${output_path}/*/ -type d; then
-    kdump_folders="$(find ${output_path}/*/ -type d)"
+  if find ${output_path}/*/ -type d > /dev/null 2>&1; then
+    echo "INFO: Crash logs detected"
+    kdump_folders="$(find ${output_path}/*/ -type d || true)"
   fi
   
   # Only count the root directories
@@ -75,7 +76,7 @@ function package_kdump_logs {
 
   if [ $num_kdump_folders -ne 0 ]; then
     # Package the whole folder together
-    tar -czC "${output_path}" -f "${output_path}.tar.gz" .
+    tar -czC "${output_path}" -f "${output_path}.tar.gz" . || true
 
     echo "INFO: Finished packaging the kdump logs"
   fi
@@ -84,12 +85,26 @@ function package_kdump_logs {
   rm -rf "${output_path}"
 }
 
+if test ! -f "${KUBECONFIG}"
+then
+	echo "No kubeconfig, so no point in gathering crash info."
+	exit 0
+fi
+
 node_label="node-role.kubernetes.io/${node_role}"
-NODES="${*:-$(oc get nodes -l ${node_label} -o jsonpath='{.items[?(@.status.nodeInfo.operatingSystem=="linux")].metadata.name}')}"
+NODES="${*:-$(oc get nodes -l ${node_label} -o jsonpath='{.items[?(@.status.nodeInfo.operatingSystem=="linux")].metadata.name}' || true)}"
 
 echo $NODES
+if [[ -z "${NODES}" ]]; then
+  echo "Couldn't lookup node info from cluster API"
+  exit 0
+fi
 
-mkdir -p $output_path
+mkdir -p $output_path || true
+if [[ ! -d "${output_path}" ]]; then
+  echo "Output directory could not be created"
+  exit 0
+fi
 
 gather_kdump_logs
 
