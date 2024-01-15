@@ -7,6 +7,7 @@ ref:
     requests:
       cpu: 300m
       memory: 300Mi
+  dnsConfig: {}
   env:
   - name: APPLY_NODE_ROLE
     default: "worker"
