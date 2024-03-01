@@ -1,8 +1,8 @@
 chain:
   as: upi-libvirt-install
   steps:
-  - ref: ipi-install-rbac
-  - ref: upi-libvirt-install-install
+  - ref: upi-install-libvirt-network
+  - ref: upi-libvirt-install
   env:
   - name: ARCH
   - name: BRANCH

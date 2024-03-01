@@ -1,0 +1,14 @@
+workflow:
+  as: openshift-e2e-libvirt-upi
+  steps:
+    pre:
+    - ref: upi-libvirt-cleanup-pre
+    - chain: upi-conf-libvirt
+    - chain: upi-libvirt-install
+    test:
+    - chain: openshift-e2e-libvirt-test
+    post:
+    - ref: upi-libvirt-cleanup-post
+  documentation: |-
+    The UPI workflow provides pre- and post- steps that provision and deprovision an OpenShift
+    cluster on libvirt.
